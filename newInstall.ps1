@@ -33,15 +33,9 @@ if (Test-Path $prerreqBase) {
         $exe = Get-ChildItem -Path $dirPath -Filter *.exe -File | Select-Object -First 1
         if ($exe) {
             $exeName = [System.IO.Path]::GetFileNameWithoutExtension($exe.Name)
-            $programFiles = @(
-                Join-Path $env:ProgramFiles $exeName
-                Join-Path ${env:ProgramFiles(x86)} $exeName
-            )
-            $alreadyInstalled = $false
-            foreach ($pf in $programFiles) {
-                if (Test-Path $pf) { $alreadyInstalled = $true; break }
-            }
-            if (-not $alreadyInstalled) {
+            # Comprobar en el registro si ya está instalado
+            $exeInstalled = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like "*$exeName*" }
+            if (-not $exeInstalled) {
                 $msg = "Instalando prerrequisito EXE: $($exe.FullName)"
                 Write-Host $msg
                 Add-Content -Path $logFile -Value $msg
@@ -73,7 +67,7 @@ if (Test-Path $prerreqBase) {
         $msi = Get-ChildItem -Path $dirPath -Filter *.msi -File | Select-Object -First 1
         if ($msi) {
             $msiName = [System.IO.Path]::GetFileNameWithoutExtension($msi.Name)
-            $product = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -like "*$msiName*" }
+            $product = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like "*$msiName*" }
             if (-not $product) {
                 $msg = "Instalando prerrequisito MSI: $($msi.FullName)"
                 Write-Host $msg
@@ -261,12 +255,13 @@ if ($dispatching -eq [System.Windows.Forms.DialogResult]::Yes) {
         if ($lecaInstalled) {
             Show-Message "LECA (Monit4C) ya está instalado. Se omite la instalación."
         } else {
-            $monitExe = Join-Path $monitPath 'setup.exe'
-            if (Test-Path $monitExe) {
-                Start-Process $monitExe -Wait
+            # Buscar ejecutable de instalación de Monit4C (*.exe) en la carpeta
+            $monitExe = Get-ChildItem -Path $monitPath -Filter '*.exe' | Where-Object { $_.Name -match 'Monit4C' } | Select-Object -First 1
+            if ($monitExe) {
+                Start-Process $monitExe.FullName -Wait
                 Show-Message "Monit4C instalado."
             } else {
-                Show-Message "No se encontró setup.exe en 06.1.1_Monit4C."
+                Show-Message "No se encontró un instalador de Monit4C en 06.1.1_Monit4C."
             }
         }
     } else {
